@@ -79,7 +79,7 @@
 
     <button id="pulsante" disabled>👋 SALUTA CICCIO</button>
 
-    <p id="messaggio"></p>
+    <p id="messaggio">Caricamento...</p>
 
     <p>Ogni saluto rende Ciccio più felice ❤️</p>
 
@@ -89,8 +89,16 @@
         "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 
         import {
+            getAuth,
+            signInAnonymously,
+            onAuthStateChanged
+        } from
+        "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+        import {
             getFirestore,
             doc,
+            getDoc,
             onSnapshot,
             runTransaction
         } from
@@ -106,6 +114,7 @@
         };
 
         const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
         const db = getFirestore(app);
 
         const contatoreRef = doc(db, "contatori", "ciccio");
@@ -114,69 +123,170 @@
         const pulsante = document.getElementById("pulsante");
         const messaggio = document.getElementById("messaggio");
 
+        let utenteCorrente = null;
+        let haSalutato = false;
         let databasePronto = false;
         let invioInCorso = false;
 
-        // Aggiorna il contatore in tempo reale
+        function aggiornaPulsante() {
+            pulsante.disabled =
+                !utenteCorrente ||
+                haSalutato ||
+                !databasePronto ||
+                invioInCorso;
+        }
+
+        // Mostra il numero totale in tempo reale
         onSnapshot(contatoreRef, (snapshot) => {
 
             if (snapshot.exists()) {
                 numeroSaluti.innerText = snapshot.data().saluti;
                 databasePronto = true;
-                pulsante.disabled = invioInCorso;
             } else {
                 numeroSaluti.innerText = "Non disponibile";
-                messaggio.innerText = "Contatore non trovato.";
-                pulsante.disabled = true;
+                databasePronto = false;
             }
 
+            aggiornaPulsante();
+
         }, (errore) => {
+
             console.error(errore);
             numeroSaluti.innerText = "Errore";
-            messaggio.innerText = "Impossibile leggere i saluti.";
             databasePronto = false;
-            pulsante.disabled = true;
+            messaggio.innerText = "Impossibile leggere il contatore.";
+            aggiornaPulsante();
+
         });
 
-        // Invia un saluto a Ciccio
+        // Identifica il visitatore in modo anonimo
+        onAuthStateChanged(auth, async (utente) => {
+
+            if (!utente) {
+                utenteCorrente = null;
+                haSalutato = false;
+                aggiornaPulsante();
+
+                try {
+                    await signInAnonymously(auth);
+                } catch (errore) {
+                    console.error(errore);
+                    messaggio.innerText =
+                        "Errore di accesso. Riprova più tardi.";
+                }
+
+                return;
+            }
+
+            utenteCorrente = utente;
+            haSalutato = false;
+            aggiornaPulsante();
+
+            try {
+
+                const salutoRef = doc(
+                    db,
+                    "saluti_utenti",
+                    utente.uid
+                );
+
+                const saluto = await getDoc(salutoRef);
+
+                // Evita che un controllo vecchio riabiliti
+                // il pulsante dopo un cambio di utente.
+                if (auth.currentUser?.uid !== utente.uid) return;
+
+                haSalutato = saluto.exists();
+
+                messaggio.innerText = haSalutato
+                    ? "❤️ Hai già salutato Ciccio!"
+                    : "Puoi mandare il tuo saluto a Ciccio!";
+
+            } catch (errore) {
+
+                console.error(errore);
+                haSalutato = true;
+                messaggio.innerText =
+                    "Impossibile verificare il tuo saluto.";
+
+            }
+
+            aggiornaPulsante();
+
+        });
+
+        // Registra un solo saluto per identità anonima
         pulsante.addEventListener("click", async () => {
 
-            if (!databasePronto || invioInCorso) return;
+            if (
+                !utenteCorrente ||
+                haSalutato ||
+                !databasePronto ||
+                invioInCorso
+            ) return;
 
             invioInCorso = true;
-            pulsante.disabled = true;
+            aggiornaPulsante();
+
             messaggio.innerText = "Invio del saluto...";
+
+            const uid = utenteCorrente.uid;
+            const salutoRef = doc(db, "saluti_utenti", uid);
 
             try {
 
                 await runTransaction(db, async (transaction) => {
 
-                    const documento = await transaction.get(contatoreRef);
+                    // Prima tutte le letture
+                    const salutoDoc =
+                        await transaction.get(salutoRef);
 
-                    if (!documento.exists()) {
-                        throw new Error("Contatore non trovato");
+                    const contatoreDoc =
+                        await transaction.get(contatoreRef);
+
+                    if (salutoDoc.exists()) {
+                        throw new Error("GIA_SALUTATO");
                     }
 
-                    const salutiAttuali = documento.data().saluti;
+                    if (!contatoreDoc.exists()) {
+                        throw new Error("CONTATORE_NON_TROVATO");
+                    }
 
+                    const salutiAttuali =
+                        contatoreDoc.data().saluti;
+
+                    // Poi le scritture atomiche
                     transaction.update(contatoreRef, {
                         saluti: salutiAttuali + 1
                     });
 
+                    transaction.set(salutoRef, {
+                        salutato: true
+                    });
+
                 });
 
-                messaggio.innerText = "❤️ Hai salutato Ciccio!";
+                haSalutato = true;
+                messaggio.innerText =
+                    "❤️ Hai salutato Ciccio! Grazie!";
 
             } catch (errore) {
 
                 console.error(errore);
-                messaggio.innerText =
-                    "❌ Saluto non inviato. Riprova.";
+
+                if (errore.message === "GIA_SALUTATO") {
+                    haSalutato = true;
+                    messaggio.innerText =
+                        "❤️ Hai già salutato Ciccio!";
+                } else {
+                    messaggio.innerText =
+                        "❌ Saluto non inviato. Riprova.";
+                }
 
             } finally {
 
                 invioInCorso = false;
-                pulsante.disabled = !databasePronto;
+                aggiornaPulsante();
 
             }
 
