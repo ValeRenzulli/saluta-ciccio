@@ -2,9 +2,78 @@
 <html lang="it">
 <head>
     <meta charset="UTF-8">
-    <title>Saluta Ciccio</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Saluta Ciccio 👋</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #ff9a9e, #fad0c4);
+            text-align: center;
+            padding: 30px;
+        }
+
+        h1 {
+            font-size: 38px;
+            color: white;
+        }
+
+        img {
+            width: 250px;
+            height: 250px;
+            object-fit: cover;
+            border-radius: 50%;
+            border: 6px solid white;
+        }
+
+        .contatore {
+            font-size: 28px;
+            margin: 25px;
+            color: white;
+            font-weight: bold;
+        }
+
+        button {
+            background: #ff4757;
+            color: white;
+            border: none;
+            padding: 18px 35px;
+            font-size: 22px;
+            border-radius: 30px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #ff6b81;
+        }
+    </style>
 </head>
+
 <body>
+
     <h1>👋 SALUTA CICCIO!</h1>
+
+    <img src="Ciccio.jpeg" alt="Foto di Ciccio">
+
+    <h2>❤️ Manda un saluto a Ciccio!</h2>
+
+    <div class="contatore">
+        👋 Saluti ricevuti: <span id="saluti">0</span>
+    </div>
+
+    <button onclick="salutaCiccio()">👋 SALUTA CICCIO</button>
+
+    <p>Ogni saluto rende Ciccio più felice ❤️</p>
+
+    <script>
+        let saluti = 0;
+
+        function salutaCiccio() {
+            saluti++;
+            document.getElementById("saluti").innerText = saluti;
+            alert("Hai salutato Ciccio! ❤️");
+        }
+    </script>
+
 </body>
 </html>
