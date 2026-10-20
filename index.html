@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
     <title>Saluta Ciccio 👋</title>
 
     <style>
@@ -11,6 +12,8 @@
             background: linear-gradient(135deg, #ff9a9e, #fad0c4);
             text-align: center;
             padding: 30px;
+            min-height: 100vh;
+            box-sizing: border-box;
         }
 
         h1 {
@@ -24,11 +27,12 @@
             object-fit: cover;
             border-radius: 50%;
             border: 6px solid white;
+            max-width: 80%;
         }
 
         .contatore {
             font-size: 28px;
-            margin: 25px;
+            margin: 25px 0;
             color: white;
             font-weight: bold;
         }
@@ -46,6 +50,18 @@
         button:hover {
             background: #ff6b81;
         }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        #messaggio {
+            color: white;
+            font-size: 18px;
+            font-weight: bold;
+            margin-top: 20px;
+        }
     </style>
 </head>
 
@@ -58,21 +74,114 @@
     <h2>❤️ Manda un saluto a Ciccio!</h2>
 
     <div class="contatore">
-        👋 Saluti ricevuti: <span id="saluti">0</span>
+        👋 Saluti ricevuti: <span id="saluti">...</span>
     </div>
 
-    <button onclick="salutaCiccio()">👋 SALUTA CICCIO</button>
+    <button id="pulsante" disabled>👋 SALUTA CICCIO</button>
+
+    <p id="messaggio"></p>
 
     <p>Ogni saluto rende Ciccio più felice ❤️</p>
 
-    <script>
-        let saluti = 0;
+    <script type="module">
 
-        function salutaCiccio() {
-            saluti++;
-            document.getElementById("saluti").innerText = saluti;
-            alert("Hai salutato Ciccio! ❤️");
-        }
+        import { initializeApp } from
+        "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+
+        import {
+            getFirestore,
+            doc,
+            onSnapshot,
+            runTransaction
+        } from
+        "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyD49gmoM48djjH_DuXsiURdN17cFegHoRo",
+            authDomain: "saluta-ciccio.firebaseapp.com",
+            projectId: "saluta-ciccio",
+            storageBucket: "saluta-ciccio.firebasestorage.app",
+            messagingSenderId: "66769159613",
+            appId: "1:66769159613:web:1820a773ffbb4f1e9bbed4"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        const contatoreRef = doc(db, "contatori", "ciccio");
+
+        const numeroSaluti = document.getElementById("saluti");
+        const pulsante = document.getElementById("pulsante");
+        const messaggio = document.getElementById("messaggio");
+
+        let databasePronto = false;
+        let invioInCorso = false;
+
+        // Aggiorna il contatore in tempo reale
+        onSnapshot(contatoreRef, (snapshot) => {
+
+            if (snapshot.exists()) {
+                numeroSaluti.innerText = snapshot.data().saluti;
+                databasePronto = true;
+                pulsante.disabled = invioInCorso;
+            } else {
+                numeroSaluti.innerText = "Non disponibile";
+                messaggio.innerText = "Contatore non trovato.";
+                pulsante.disabled = true;
+            }
+
+        }, (errore) => {
+            console.error(errore);
+            numeroSaluti.innerText = "Errore";
+            messaggio.innerText = "Impossibile leggere i saluti.";
+            databasePronto = false;
+            pulsante.disabled = true;
+        });
+
+        // Invia un saluto a Ciccio
+        pulsante.addEventListener("click", async () => {
+
+            if (!databasePronto || invioInCorso) return;
+
+            invioInCorso = true;
+            pulsante.disabled = true;
+            messaggio.innerText = "Invio del saluto...";
+
+            try {
+
+                await runTransaction(db, async (transaction) => {
+
+                    const documento = await transaction.get(contatoreRef);
+
+                    if (!documento.exists()) {
+                        throw new Error("Contatore non trovato");
+                    }
+
+                    const salutiAttuali = documento.data().saluti;
+
+                    transaction.update(contatoreRef, {
+                        saluti: salutiAttuali + 1
+                    });
+
+                });
+
+                messaggio.innerText = "❤️ Hai salutato Ciccio!";
+
+            } catch (errore) {
+
+                console.error(errore);
+                messaggio.innerText =
+                    "❌ Saluto non inviato. Riprova.";
+
+            } finally {
+
+                invioInCorso = false;
+                pulsante.disabled = !databasePronto;
+
+            }
+
+        });
+
     </script>
 
 </body>
